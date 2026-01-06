@@ -29,8 +29,8 @@ export class CartPage {
     this.confirmClearBtn = page.locator("#btnClearCartConfirm");
   }
 
-  async goto(url: string) {
-    await this.page.goto(url, { waitUntil: "domcontentloaded" });
+  async goto(path: string = "/") {
+    await this.page.goto(path, { waitUntil: "domcontentloaded" });
   }
 
   async openPrimaryCategory() {
@@ -47,10 +47,7 @@ export class CartPage {
     await btn.scrollIntoViewIfNeeded();
     await btn.click({ noWaitAfter: true });
 
-    // wait for cart state to update
-    await expect(this.page.locator("#cartlnk")).toContainText(/\d+/, {
-      timeout: 15000,
-    });
+    await expect(this.cartLink).toContainText(/\d+/, { timeout: 15000 });
   }
 
   async goToCart() {
@@ -64,18 +61,18 @@ export class CartPage {
     const prices = await this.lineTotals.allInnerTexts();
     const subtotal = prices.reduce(
       (sum, p) => sum + Number(p.replace(/[^0-9.]/g, "")),
-      0,
+      0
     );
 
     const shipping =
       subtotal >= 200
         ? 0
         : Number(
-            (await this.shippingLabel.innerText()).replace(/[^0-9.]/g, ""),
+            (await this.shippingLabel.innerText()).replace(/[^0-9.]/g, "")
           );
 
     const displayed = Number(
-      (await this.cartTotalFooter.innerText()).replace(/[^0-9.]/g, ""),
+      (await this.cartTotalFooter.innerText()).replace(/[^0-9.]/g, "")
     );
 
     expect(displayed).toBeCloseTo(subtotal + shipping, 2);

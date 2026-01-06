@@ -15,14 +15,17 @@ export class LoginPage {
     this.page = page;
 
     this.loginFrame = page.frameLocator('xpath=//*[@id="wrapperLogin"]');
+
     this.emailField = page
       .getByText("This page requires frames in")
       .contentFrame()
       .getByPlaceholder("Email");
+
     this.passwordField = page
       .getByText("This page requires frames in")
       .contentFrame()
       .getByPlaceholder("Password");
+
     this.loginBtn = page
       .getByText("This page requires frames in")
       .contentFrame()
@@ -31,17 +34,16 @@ export class LoginPage {
     this.loginButton = page.getByText("Log in");
     this.cookieDescription = page.locator("#cookieconsent\\:desc");
     this.cookieAcceptButton = page.locator(
-      'xpath=//*[@id="Body"]/div[1]/div/a',
+      'xpath=//*[@id="Body"]/div[1]/div/a'
     );
     this.userLabel = page.locator("#LoginNameLabel");
   }
 
-  async goto(url: string) {
-    await this.page.goto(url, { waitUntil: "domcontentloaded" });
+  async goto(path: string = "/") {
+    await this.page.goto(path, { waitUntil: "domcontentloaded" });
   }
 
   async acceptCookies() {
-    // Only try to accept cookies if the modal is present
     if (await this.cookieDescription.isVisible({ timeout: 5000 })) {
       await expect(this.cookieAcceptButton).toBeVisible();
       await this.cookieAcceptButton.click();
@@ -54,13 +56,9 @@ export class LoginPage {
   }
 
   async login(email: string, password: string) {
-    // Wait for the iframe before accessing its content
     await this.loginBtn.click();
-    //await this.page.waitForSelector('#wrapperLogin', { timeout: 10000 });
-
     await this.emailField.fill(email);
     await this.passwordField.fill(password);
-
     await this.loginBtn.click();
   }
 

@@ -24,7 +24,6 @@ function getCredentials(projectName: string) {
   return {
     email: process.env[`${prefix}_EMAIL`]!,
     password: process.env[`${prefix}_PASSWORD`]!,
-    baseUrl: process.env[`${prefix}_BASE_URL`]!,
   };
 }
 
@@ -33,7 +32,6 @@ function getCredentials(projectName: string) {
 // ======================================================
 test.describe('Homepage, Search and Login Test', () => {
   let loginPage: LoginPage;
-  let baseUrl: string;
   let email: string;
   let password: string;
 
@@ -42,10 +40,9 @@ test.describe('Homepage, Search and Login Test', () => {
 
     email = creds.email;
     password = creds.password;
-    baseUrl = creds.baseUrl;
 
     loginPage = new LoginPage(page);
-    await loginPage.goto(baseUrl);
+    await loginPage.goto(); // ✅ baseURL
   });
 
   test('can load homepage and validate title', async ({ page }) => {
@@ -58,15 +55,17 @@ test.describe('Homepage, Search and Login Test', () => {
     await loginPage.acceptCookies();
   });
 
-  test('can login successfully', async ({ page }) => {
+  test('can login successfully', async () => {
     await loginPage.acceptCookies();
-    await page.getByText('Log in').click();
+    await loginPage.clickLogin();
     await loginPage.login(email, password);
     await loginPage.assertLoginSuccess();
   });
 
   test('NZ can search isbn from landing page and verify all results', async ({ page }) => {
+    // 🔹 Explicit cross-region test (intentional)
     await page.goto('https://cengage.co.nz/');
+
     await page.getByLabel('Search').fill(SEARCH_QUERY);
     await page.getByLabel('Search').press('Enter');
 
@@ -76,13 +75,15 @@ test.describe('Homepage, Search and Login Test', () => {
 
     for (const isbn of EXPECTED_ISBNS) {
       await expect(resultsContainer).toContainText(isbn, {
-        timeout: 10000,
+        timeout: 10_000,
       });
     }
   });
 
   test('AU can search isbn from landing page and verify all results', async ({ page }) => {
+    // 🔹 Explicit cross-region test (intentional)
     await page.goto('https://cengage.com.au/');
+
     await page.getByLabel('Search').fill(SEARCH_QUERY);
     await page.getByLabel('Search').press('Enter');
 
@@ -92,7 +93,7 @@ test.describe('Homepage, Search and Login Test', () => {
 
     for (const isbn of EXPECTED_ISBNS) {
       await expect(resultsContainer).toContainText(isbn, {
-        timeout: 10000,
+        timeout: 10_000,
       });
     }
   });
@@ -102,18 +103,16 @@ test.describe('Homepage, Search and Login Test', () => {
 // Cart Tests
 // ======================================================
 test.describe('Cart and Checkout Tests', () => {
-  let baseUrl: string;
-  let creds: { email: string; password: string; baseUrl: string };
+  let creds: { email: string; password: string };
 
   test.beforeEach(async ({}, testInfo) => {
     creds = getCredentials(testInfo.project.name);
-    baseUrl = creds.baseUrl;
   });
 
   test('can add to cart and verify total', async ({ page }) => {
     const cart = new CartPage(page);
 
-    await cart.goto(baseUrl);
+    await cart.goto(); // ✅ baseURL
     await cart.openPrimaryCategory();
     await cart.triggerSearch();
     await cart.addFirstItems();
@@ -126,14 +125,14 @@ test.describe('Cart and Checkout Tests', () => {
     const cart = new CartPage(page);
 
     // login
-    await login.goto(baseUrl);
+    await login.goto();
     await login.acceptCookies();
     await login.clickLogin();
     await login.login(creds.email, creds.password);
     await login.assertLoginSuccess();
 
     // cart
-    await cart.goto(baseUrl);
+    await cart.goto();
     await cart.openPrimaryCategory();
     await cart.triggerSearch();
     await cart.addFirstItems();
@@ -143,9 +142,10 @@ test.describe('Cart and Checkout Tests', () => {
     await expect(
       page.locator('#dnn_ctr1322_View_ctl00_btnCheckout')
     ).toBeVisible();
+
     await page.locator('#dnn_ctr1322_View_ctl00_btnCheckout').click();
 
-    await expect(page).toHaveURL(/\/checkout$/i, { timeout: 20000 });
+    await expect(page).toHaveURL(/\/checkout$/i, { timeout: 20_000 });
 
     await page.locator('#chkIagree').click();
     await expect(page.locator('#btnPayOnInvoice')).toBeVisible();
