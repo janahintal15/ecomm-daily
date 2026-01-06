@@ -18,13 +18,14 @@ pipeline {
             }
         }
 
-        stage('Clean & Install') {
+stage('Clean & Install') {
             steps {
                 bat 'npm ci'
-                // We combine the 'set' and 'install' so they happen in the same session
+                // This forces Playwright to download the EXACT version required 
+                // by your current package.json into your custom folder.
                 bat """
                     set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                    npx playwright install chromium --with-deps --force
+                    npx playwright install chromium --with-deps
                 """
             }
         }
@@ -56,29 +57,30 @@ ENV=${params.TEST_ENV}
         }
 
 stage('Run Playwright') {
-      steps {
+    steps {
         script {
-          // Use 'S2' as a default if TEST_ENV is not provided (null)
-          def targetProject = params.TEST_ENV ?: 'S2'
-          def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-          
-          int exitCode
-          if (isUnix()) {
-            exitCode = sh(returnStatus: true, script: "npx playwright test --project=${targetProject} ${tagArg}")
-          } else {
-            // Ensure the browser path is set and use the targetProject variable
-            exitCode = bat(returnStatus: true, script: "set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH} && npx playwright test --project=${targetProject} ${tagArg}")
-          }
-          
-          echo "Playwright exited with code ${exitCode}"
-          
-          // Mark as unstable if tests fail, but don't crash the whole pipeline
-          if (exitCode != 0) {
-              currentBuild.result = 'UNSTABLE'
-          }
+            // Use 'S2' as a default if TEST_ENV is not provided (null)
+            def targetProject = params.TEST_ENV ?: 'S2'
+            def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
+            
+            int exitCode
+            if (isUnix()) {
+                // For Linux/Mac agents
+                exitCode = sh(returnStatus: true, script: "export PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH} && npx playwright test --project=${targetProject} ${tagArg}")
+            } else {
+                // For your Windows agent (matches your screenshot)
+                // We combine 'set' and 'test' in one line to ensure the path is locked in
+                exitCode = bat(returnStatus: true, script: "set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH} && npx playwright test --project=${targetProject} ${tagArg}")
+            }
+            
+            echo "Playwright exited with code ${exitCode}"
+            
+            if (exitCode != 0) {
+                currentBuild.result = 'UNSTABLE'
+            }
         }
-      }
     }
+}
     }
 
     post {
