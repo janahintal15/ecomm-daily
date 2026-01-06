@@ -17,14 +17,21 @@ pipeline {
   }
 
   parameters {
-    choice(name: 'TEST_ENV', choices: ['S2', 'PROD'], description: 'Which Playwright project to run')
-    string(name: 'TAGS', defaultValue: '', description: 'Optional @tag filter (e.g., smoke)')
+    choice(
+      name: 'TEST_ENV',
+      choices: ['S2', 'PROD'],
+      description: 'Which Playwright project to run'
+    )
+    string(
+      name: 'TAGS',
+      defaultValue: '',
+      description: 'Optional @tag filter (e.g. smoke)'
+    )
   }
 
   environment {
     JUNIT_FILE = 'reports/junit.xml'
     HTML_DIR   = 'playwright-report'
-    PLAYWRIGHT_BROWSERS_PATH = 'D:\\Jenkins\\playwright-browsers'
     RECIPIENTS = 'janah.intal@ibc.com.au'
   }
 
@@ -36,7 +43,9 @@ pipeline {
           $class: 'GitSCM',
           branches: [[name: '*/main']],
           extensions: [[$class: 'WipeWorkspace']],
-          userRemoteConfigs: [[url: 'https://github.com/janahintal15/ecomm-daily.git']],
+          userRemoteConfigs: [[
+            url: 'https://github.com/janahintal15/ecomm-daily.git'
+          ]],
           changelog: false
         ])
       }
@@ -44,35 +53,28 @@ pipeline {
 
     stage('Install Dependencies') {
       steps {
-        bat 'npm ci'
+        bat '''
+          node -v
+          npm -v
+          npm ci
+        '''
       }
     }
 
     stage('Install Playwright Browsers') {
       steps {
-        bat """
-          echo Cleaning Playwright browser cache
-          rmdir /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}" 2>nul
-          mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-
-          node -v
-          npm -v
-
-          echo Installing Playwright browsers
-          npx playwright install chromium chromium-headless-shell
-        """
+        bat '''
+          echo Installing Playwright browsers (official default path)
+          npx playwright install
+        '''
       }
     }
 
     stage('Verify Playwright Install') {
       steps {
-        bat """
-          echo Playwright version:
+        bat '''
           npx playwright --version
-
-          echo Installed browsers:
-          dir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-        """
+        '''
       }
     }
 
@@ -81,25 +83,37 @@ pipeline {
         script {
           if (params.TEST_ENV == 'S2') {
             withCredentials([
-              usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'U', passwordVariable: 'P')
+              usernamePassword(
+                credentialsId: 'ecom-s2-creds',
+                usernameVariable: 'U',
+                passwordVariable: 'P'
+              )
             ]) {
               writeFile file: '.env', text: """\
 S2_BASE_URL=https://s2.cengagelearning.com.au
 PROD_BASE_URL=https://www.cengage.com.au
+
 S2_EMAIL=${U}
 S2_PASSWORD=${P}
+
 ENV=S2
 """
             }
           } else {
             withCredentials([
-              usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'U', passwordVariable: 'P')
+              usernamePassword(
+                credentialsId: 'ecom-prod-creds',
+                usernameVariable: 'U',
+                passwordVariable: 'P'
+              )
             ]) {
               writeFile file: '.env', text: """\
 S2_BASE_URL=https://s2.cengagelearning.com.au
 PROD_BASE_URL=https://www.cengage.com.au
+
 PROD_EMAIL=${U}
 PROD_PASSWORD=${P}
+
 ENV=PROD
 """
             }
@@ -108,7 +122,6 @@ ENV=PROD
       }
     }
 
-    // ✅ UPDATED STAGE (UNSTABLE instead of FAIL)
     stage('Run Playwright') {
       steps {
         script {
@@ -118,7 +131,7 @@ ENV=PROD
           )
 
           if (status != 0) {
-            unstable("Playwright tests failed")
+            unstable('Playwright tests failed')
           }
         }
       }
@@ -137,7 +150,8 @@ ENV=PROD
         reportName: 'Playwright HTML Report'
       ])
 
-      archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*, ${JUNIT_FILE}", allowEmptyArchive: true
+      archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*, ${JUNIT_FILE}",
+                       allowEmptyArchive: true
     }
 
     success {
@@ -165,7 +179,7 @@ ENV=PROD
             mimeType: 'text/html',
             attachmentsPattern: "${JUNIT_FILE}",
             body: """
-              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> is UNSTABLE (some tests failed).</p>
+              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> is UNSTABLE.</p>
               <p><a href="${env.BUILD_URL}">View build</a></p>
             """
           )
