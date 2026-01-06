@@ -36,10 +36,7 @@ pipeline {
           $class: 'GitSCM',
           branches: [[name: '*/main']],
           extensions: [[$class: 'WipeWorkspace']],
-          userRemoteConfigs: [[
-        url: 'https://github.com/janahintal15/ecomm-daily.git',
-        credentialsId: 'github-pat'
-        ]],
+          userRemoteConfigs: [[url: 'https://github.com/janahintal15/ecomm-daily.git']],
           changelog: false
         ])
       }
@@ -51,23 +48,27 @@ pipeline {
       }
     }
 
-stage('Install Playwright Browsers') {
-  steps {
-    bat """
-      node -v
-      npm -v
-
-      if exist "${env.PLAYWRIGHT_BROWSERS_PATH}" (
-        echo Cleaning old Playwright browsers
-        rmdir /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}"
-      )
-
-      mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-
-      npx playwright install chromium
-    """
-  }
-}
+    stage('Install Playwright Browsers') {
+      steps {
+        script {
+          if (isUnix()) {
+            sh '''
+              node -v
+              npm -v
+              npx playwright install --with-deps
+            '''
+          } else {
+            bat """
+              node -v
+              npm -v
+              if not exist "${env.PLAYWRIGHT_BROWSERS_PATH}" mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
+              set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
+              npx playwright install --force chromium
+            """
+          }
+        }
+      }
+    }
 
     stage('Verify install') {
       steps {
@@ -81,50 +82,31 @@ stage('Install Playwright Browsers') {
       }
     }
 
-  stage('Create .env for selected env') {
-    steps {
-      script {
-        if (params.TEST_ENV == 'S2') {
-          withCredentials([
-            usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'AU_U', passwordVariable: 'AU_P'),
-            usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'NZ_U', passwordVariable: 'NZ_P')
-          ]) {
-            writeFile file: '.env', text: """\
-  S2_BASE_URL=https://s2.cengagelearning.com.au
-  S2_BASE_URL_NZ=https://s2.cengagelearning.co.nz
-
-  S2_EMAIL=${AU_U}
-  S2_PASSWORD=${AU_P}
-
-  S2_EMAIL_NZ=${NZ_U}
-  S2_PASSWORD_NZ=${NZ_P}
-
-  ENV=S2
-  """
-          }
-        } else {
-          withCredentials([
-            usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'AU_U', passwordVariable: 'AU_P'),
-            usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'NZ_U', passwordVariable: 'NZ_P')
-          ]) {
-            writeFile file: '.env', text: """\
-  PROD_BASE_URL=https://www.cengage.com.au
-  PROD_BASE_URL_NZ=https://www.cengage.co.nz
-
-  PROD_EMAIL=${AU_U}
-  PROD_PASSWORD=${AU_P}
-
-  PROD_EMAIL_NZ=${NZ_U}
-  PROD_PASSWORD_NZ=${NZ_P}
-
-  ENV=PROD
-  """
+    stage('Create .env for selected env') {
+      steps {
+        script {
+          if (params.TEST_ENV == 'S2') {
+            withCredentials([usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
+              writeFile file: '.env', text: """S2_BASE_URL=https://s2.cengagelearning.com.au
+PROD_BASE_URL=https://www.cengage.com.au
+S2_EMAIL=${U}
+S2_PASSWORD=${P}
+ENV=S2
+"""
+            }
+          } else {
+            withCredentials([usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
+              writeFile file: '.env', text: """S2_BASE_URL=https://s2.cengagelearning.com.au
+PROD_BASE_URL=https://www.cengage.com.au
+PROD_EMAIL=${U}
+PROD_PASSWORD=${P}
+ENV=PROD
+"""
+            }
           }
         }
       }
     }
-  }
-
 
     stage('Run Playwright') {
       steps {
@@ -156,6 +138,23 @@ stage('Install Playwright Browsers') {
       ])
 
       archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*, ${JUNIT_FILE}", allowEmptyArchive: true
+    }
+
+    success {
+      script {
+        if (params.TEST_ENV == 'PROD') {
+          emailext(
+            to: "${env.RECIPIENTS}",
+            subject: "ECOMM Playwright SUCCESS #${env.BUILD_NUMBER}",
+            mimeType: 'text/html',
+            body: """
+              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> completed successfully.</p>
+              <p>Build: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+              <p>Open <b>Playwright HTML Report</b> on the build page for details.</p>
+            """
+          )
+        }
+      }
     }
 
     unstable {
