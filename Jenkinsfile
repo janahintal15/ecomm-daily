@@ -3,7 +3,6 @@ pipeline {
 
   tools { nodejs 'node20' }
 
-  // Run every day 06:00 Sydney time
   triggers {
     parameterizedCron('''
     TZ=Australia/Sydney
@@ -30,6 +29,7 @@ pipeline {
   }
 
   stages {
+
     stage('Checkout') {
       steps {
         checkout([
@@ -50,35 +50,29 @@ pipeline {
 
     stage('Install Playwright Browsers') {
       steps {
-        script {
-          if (isUnix()) {
-            sh '''
-              node -v
-              npm -v
-              npx playwright install --with-deps
-            '''
-          } else {
-            bat """
-              node -v
-              npm -v
-              if not exist "${env.PLAYWRIGHT_BROWSERS_PATH}" mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-              set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-              npx playwright install --force chromium
-            """
-          }
-        }
+        bat """
+          echo Cleaning Playwright browser cache
+          rmdir /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}" 2>nul
+          mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
+
+          node -v
+          npm -v
+
+          echo Installing Playwright browsers
+          npx playwright install chromium chromium-headless-shell
+        """
       }
     }
 
-    stage('Verify install') {
+    stage('Verify Playwright Install') {
       steps {
-        script {
-          if (isUnix()) {
-            sh 'ls -la node_modules/@playwright/test || echo "Playwright not found"'
-          } else {
-            bat 'dir node_modules\\@playwright\\test || echo Playwright not found'
-          }
-        }
+        bat """
+          echo Playwright version:
+          npx playwright --version
+
+          echo Installed browsers:
+          dir "${env.PLAYWRIGHT_BROWSERS_PATH}"
+        """
       }
     }
 
@@ -86,8 +80,11 @@ pipeline {
       steps {
         script {
           if (params.TEST_ENV == 'S2') {
-            withCredentials([usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
-              writeFile file: '.env', text: """S2_BASE_URL=https://s2.cengagelearning.com.au
+            withCredentials([
+              usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'U', passwordVariable: 'P')
+            ]) {
+              writeFile file: '.env', text: """\
+S2_BASE_URL=https://s2.cengagelearning.com.au
 PROD_BASE_URL=https://www.cengage.com.au
 S2_EMAIL=${U}
 S2_PASSWORD=${P}
@@ -95,8 +92,11 @@ ENV=S2
 """
             }
           } else {
-            withCredentials([usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'U', passwordVariable: 'P')]) {
-              writeFile file: '.env', text: """S2_BASE_URL=https://s2.cengagelearning.com.au
+            withCredentials([
+              usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'U', passwordVariable: 'P')
+            ]) {
+              writeFile file: '.env', text: """\
+S2_BASE_URL=https://s2.cengagelearning.com.au
 PROD_BASE_URL=https://www.cengage.com.au
 PROD_EMAIL=${U}
 PROD_PASSWORD=${P}
@@ -112,13 +112,9 @@ ENV=PROD
       steps {
         script {
           def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-          int exitCode
-          if (isUnix()) {
-            exitCode = sh(returnStatus: true, script: "npx playwright test --project=${params.TEST_ENV} ${tagArg}")
-          } else {
-            exitCode = bat(returnStatus: true, script: "npx playwright test --project=${params.TEST_ENV} ${tagArg}")
-          }
-          echo "Playwright exited with code ${exitCode} — continuing to publish reports."
+          bat """
+            npx playwright test --project=${params.TEST_ENV} ${tagArg}
+          """
         }
       }
     }
@@ -132,7 +128,6 @@ ENV=PROD
         reportDir: "${HTML_DIR}",
         reportFiles: 'index.html',
         allowMissing: true,
-        alwaysLinkToLastBuild: false,
         keepAll: true,
         reportName: 'Playwright HTML Report'
       ])
@@ -149,8 +144,7 @@ ENV=PROD
             mimeType: 'text/html',
             body: """
               <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> completed successfully.</p>
-              <p>Build: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-              <p>Open <b>Playwright HTML Report</b> on the build page for details.</p>
+              <p><a href="${env.BUILD_URL}">View build</a></p>
             """
           )
         }
@@ -166,12 +160,8 @@ ENV=PROD
             mimeType: 'text/html',
             attachmentsPattern: "${JUNIT_FILE}",
             body: """
-              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> is UNSTABLE (some tests failed).</p>
-              <p>Build: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-              <ul>
-                <li>JUnit XML attached</li>
-                <li>Click <b>Playwright HTML Report</b> on the build page for screenshots/videos/traces</li>
-              </ul>
+              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> is UNSTABLE.</p>
+              <p><a href="${env.BUILD_URL}">View build</a></p>
             """
           )
         }
@@ -188,11 +178,7 @@ ENV=PROD
             attachmentsPattern: "${JUNIT_FILE}",
             body: """
               <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> FAILED.</p>
-              <p>Build: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-              <ul>
-                <li>JUnit XML attached</li>
-                <li>Open <b>Playwright HTML Report</b> on the build page for details</li>
-              </ul>
+              <p><a href="${env.BUILD_URL}">View build</a></p>
             """
           )
         }
