@@ -55,22 +55,30 @@ ENV=${params.TEST_ENV}
             }
         }
 
-        stage('Run Playwright') {
-            steps {
-                script {
-                    def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-                    // IMPORTANT: We wrap the command to ensure the ENV variable is active during execution
-                    int exitCode = bat(
-                        returnStatus: true, 
-                        script: """
-                            set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                            npx playwright test --project=${params.TEST_ENV} ${tagArg}
-                        """
-                    )
-                    if (exitCode != 0) { currentBuild.result = 'UNSTABLE' }
-                }
-            }
+stage('Run Playwright') {
+      steps {
+        script {
+          // Use 'S2' as a default if TEST_ENV is not provided (null)
+          def targetProject = params.TEST_ENV ?: 'S2'
+          def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
+          
+          int exitCode
+          if (isUnix()) {
+            exitCode = sh(returnStatus: true, script: "npx playwright test --project=${targetProject} ${tagArg}")
+          } else {
+            // Ensure the browser path is set and use the targetProject variable
+            exitCode = bat(returnStatus: true, script: "set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH} && npx playwright test --project=${targetProject} ${tagArg}")
+          }
+          
+          echo "Playwright exited with code ${exitCode}"
+          
+          // Mark as unstable if tests fail, but don't crash the whole pipeline
+          if (exitCode != 0) {
+              currentBuild.result = 'UNSTABLE'
+          }
         }
+      }
+    }
     }
 
     post {
