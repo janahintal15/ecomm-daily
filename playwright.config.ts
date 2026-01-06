@@ -28,6 +28,8 @@ export default defineConfig({
     trace: "retain-on-failure",
     video: "retain-on-failure",
     screenshot: "only-on-failure",
+    browserName: 'chromium',
+    channel: undefined, // VERY IMPORTANT
   },
   projects: [
     {

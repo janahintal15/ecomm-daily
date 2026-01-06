@@ -51,27 +51,23 @@ pipeline {
       }
     }
 
-    stage('Install Playwright Browsers') {
-      steps {
-        script {
-          if (isUnix()) {
-            sh '''
-              node -v
-              npm -v
-              npx playwright install --with-deps
-            '''
-          } else {
-            bat """
-              node -v
-              npm -v
-              if not exist "${env.PLAYWRIGHT_BROWSERS_PATH}" mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-              set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-              npx playwright install --force
-            """
-          }
-        }
-      }
-    }
+stage('Install Playwright Browsers') {
+  steps {
+    bat """
+      node -v
+      npm -v
+
+      if exist "${env.PLAYWRIGHT_BROWSERS_PATH}" (
+        echo Cleaning old Playwright browsers
+        rmdir /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}"
+      )
+
+      mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
+
+      npx playwright install chromium
+    """
+  }
+}
 
     stage('Verify install') {
       steps {
