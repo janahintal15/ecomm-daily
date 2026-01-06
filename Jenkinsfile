@@ -1,44 +1,39 @@
 pipeline {
   agent any
 
-  tools { nodejs 'node20' }
-
-  triggers {
-    parameterizedCron('''
-    TZ=Australia/Sydney
-    0 6 * * * %TEST_ENV=PROD
-    ''')
+  tools {
+    nodejs 'node20'
   }
 
   options {
     timestamps()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
     disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
   }
 
   parameters {
-    choice(name: 'TEST_ENV', choices: ['S2', 'PROD'], description: 'Which Playwright project to run')
-    string(name: 'TAGS', defaultValue: '', description: 'Optional @tag filter (e.g., smoke)')
+    choice(
+      name: 'TEST_ENV',
+      choices: ['S2', 'PROD'],
+      description: 'Which Playwright project to run'
+    )
   }
 
   environment {
+    // ✅ MUST be here so Playwright config sees them at startup
+    S2_BASE_URL   = 'https://s2.cengagelearning.com.au'
+    PROD_BASE_URL = 'https://www.cengage.com.au'
+
     JUNIT_FILE = 'reports/junit.xml'
     HTML_DIR   = 'playwright-report'
     PLAYWRIGHT_BROWSERS_PATH = 'D:\\Jenkins\\playwright-browsers'
-    RECIPIENTS = 'janah.intal@ibc.com.au'
   }
 
   stages {
 
     stage('Checkout') {
       steps {
-        checkout([
-          $class: 'GitSCM',
-          branches: [[name: '*/main']],
-          extensions: [[$class: 'WipeWorkspace']],
-          userRemoteConfigs: [[url: 'https://github.com/janahintal15/ecomm-daily.git']],
-          changelog: false
-        ])
+        checkout scm
       }
     }
 
@@ -50,57 +45,46 @@ pipeline {
 
     stage('Install Playwright Browsers') {
       steps {
-        bat """
+        bat '''
           echo Cleaning Playwright browser cache
-          rmdir /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}" 2>nul
-          mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
+          rmdir /s /q "%PLAYWRIGHT_BROWSERS_PATH%" 2>nul
+          mkdir "%PLAYWRIGHT_BROWSERS_PATH%"
 
           node -v
           npm -v
 
-          echo Installing Playwright browsers
           npx playwright install chromium chromium-headless-shell
-        """
+        '''
       }
     }
 
-    stage('Verify Playwright Install') {
-      steps {
-        bat """
-          echo Playwright version:
-          npx playwright --version
-
-          echo Installed browsers:
-          dir "${env.PLAYWRIGHT_BROWSERS_PATH}"
-        """
-      }
-    }
-
-    stage('Create .env for selected env') {
+    stage('Create .env (credentials only)') {
       steps {
         script {
           if (params.TEST_ENV == 'S2') {
             withCredentials([
-              usernamePassword(credentialsId: 'ecom-s2-creds', usernameVariable: 'U', passwordVariable: 'P')
+              usernamePassword(
+                credentialsId: 'ecom-s2-creds',
+                usernameVariable: 'EMAIL',
+                passwordVariable: 'PASSWORD'
+              )
             ]) {
               writeFile file: '.env', text: """\
-S2_BASE_URL=https://s2.cengagelearning.com.au
-PROD_BASE_URL=https://www.cengage.com.au
-S2_EMAIL=${U}
-S2_PASSWORD=${P}
-ENV=S2
+S2_EMAIL=${EMAIL}
+S2_PASSWORD=${PASSWORD}
 """
             }
           } else {
             withCredentials([
-              usernamePassword(credentialsId: 'ecom-prod-creds', usernameVariable: 'U', passwordVariable: 'P')
+              usernamePassword(
+                credentialsId: 'ecom-prod-creds',
+                usernameVariable: 'EMAIL',
+                passwordVariable: 'PASSWORD'
+              )
             ]) {
               writeFile file: '.env', text: """\
-S2_BASE_URL=https://s2.cengagelearning.com.au
-PROD_BASE_URL=https://www.cengage.com.au
-PROD_EMAIL=${U}
-PROD_PASSWORD=${P}
-ENV=PROD
+PROD_EMAIL=${EMAIL}
+PROD_PASSWORD=${PASSWORD}
 """
             }
           }
@@ -110,12 +94,9 @@ ENV=PROD
 
     stage('Run Playwright') {
       steps {
-        script {
-          def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-          bat """
-            npx playwright test --project=${params.TEST_ENV} ${tagArg}
-          """
-        }
+        bat """
+          npx playwright test --project=${params.TEST_ENV}
+        """
       }
     }
   }
@@ -132,57 +113,8 @@ ENV=PROD
         reportName: 'Playwright HTML Report'
       ])
 
-      archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*, ${JUNIT_FILE}", allowEmptyArchive: true
-    }
-
-    success {
-      script {
-        if (params.TEST_ENV == 'PROD') {
-          emailext(
-            to: "${env.RECIPIENTS}",
-            subject: "ECOMM Playwright SUCCESS #${env.BUILD_NUMBER}",
-            mimeType: 'text/html',
-            body: """
-              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> completed successfully.</p>
-              <p><a href="${env.BUILD_URL}">View build</a></p>
-            """
-          )
-        }
-      }
-    }
-
-    unstable {
-      script {
-        if (params.TEST_ENV == 'PROD') {
-          emailext(
-            to: "${env.RECIPIENTS}",
-            subject: "ECOMM Playwright UNSTABLE #${env.BUILD_NUMBER}",
-            mimeType: 'text/html',
-            attachmentsPattern: "${JUNIT_FILE}",
-            body: """
-              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> is UNSTABLE.</p>
-              <p><a href="${env.BUILD_URL}">View build</a></p>
-            """
-          )
-        }
-      }
-    }
-
-    failure {
-      script {
-        if (params.TEST_ENV == 'PROD') {
-          emailext(
-            to: "${env.RECIPIENTS}",
-            subject: "ECOMM Playwright FAILED #${env.BUILD_NUMBER}",
-            mimeType: 'text/html',
-            attachmentsPattern: "${JUNIT_FILE}",
-            body: """
-              <p><b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> FAILED.</p>
-              <p><a href="${env.BUILD_URL}">View build</a></p>
-            """
-          )
-        }
-      }
+      archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*, ${JUNIT_FILE}",
+                       allowEmptyArchive: true
     }
   }
 }
