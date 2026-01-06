@@ -18,14 +18,16 @@ pipeline {
             }
         }
 
-stage('Clean & Install') {
+stage('Clean & Reinstall Playwright') {
             steps {
                 bat 'npm ci'
-                // This forces Playwright to download the EXACT version required 
-                // by your current package.json into your custom folder.
+                // 1. Wipe the old folder to remove corrupted versions
+                // 2. Set the path and install fresh
                 bat """
+                    if exist "${env.PLAYWRIGHT_BROWSERS_PATH}" rd /s /q "${env.PLAYWRIGHT_BROWSERS_PATH}"
+                    mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
                     set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                    npx playwright install chromium --with-deps
+                    npx playwright install chromium --with-deps --force
                 """
             }
         }
