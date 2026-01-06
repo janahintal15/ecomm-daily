@@ -66,7 +66,7 @@ pipeline {
               npm -v
               if not exist "${env.PLAYWRIGHT_BROWSERS_PATH}" mkdir "${env.PLAYWRIGHT_BROWSERS_PATH}"
               set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-              npx playwright install --force chromium
+              npx playwright install --force
             """
           }
         }
