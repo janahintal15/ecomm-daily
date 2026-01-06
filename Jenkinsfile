@@ -13,23 +13,21 @@ pipeline {
       }
     }
 
-    stage('Install Dependencies') {
+    stage('Install dependencies') {
       steps {
         bat '''
-          echo === NODE & NPM ===
           node -v
           npm -v
 
-          echo === CLEAN INSTALL ===
-          rmdir /s /q node_modules 2>nul
-          del package-lock.json 2>nul
+          if exist node_modules rmdir /s /q node_modules
+          if exist package-lock.json del package-lock.json
 
           npm install
         '''
       }
     }
 
-    stage('Install Playwright Browsers') {
+    stage('Install Playwright browsers') {
       steps {
         bat '''
           npx playwright install chromium
@@ -37,7 +35,7 @@ pipeline {
       }
     }
 
-    stage('Run Playwright Tests') {
+    stage('Run tests') {
       steps {
         bat '''
           npx playwright test
