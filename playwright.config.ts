@@ -1,5 +1,8 @@
-import { defineConfig, devices } from "@playwright/test";
-import "dotenv/config";
+import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+
+// ✅ Load .env
+dotenv.config();
 
 const S2_BASE_URL =
   process.env.S2_BASE_URL ?? "https://s2.cengagelearning.com.au";
@@ -22,8 +25,6 @@ export default defineConfig({
   ],
 
   use: {
-    browserName: "chromium",
-    channel: undefined,
     headless: true,
     viewport: { width: 1280, height: 800 },
     trace: "retain-on-failure",
