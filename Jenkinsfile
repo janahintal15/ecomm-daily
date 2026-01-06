@@ -21,10 +21,10 @@ pipeline {
         stage('Clean & Install') {
             steps {
                 bat 'npm ci'
-                // Force a clean install of the browser to the specific path
+                // We combine the 'set' and 'install' so they happen in the same session
                 bat """
                     set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                    npx playwright install chromium --with-deps
+                    npx playwright install chromium --with-deps --force
                 """
             }
         }
