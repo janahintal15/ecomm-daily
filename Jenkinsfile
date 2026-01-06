@@ -26,7 +26,7 @@ pipeline {
     JUNIT_FILE = 'reports/junit.xml'
     HTML_DIR   = 'playwright-report'
     PLAYWRIGHT_BROWSERS_PATH = 'D:\\Jenkins\\playwright-browsers'
-    RECIPIENTS = 'janah.intal@ibc.com.au, Will.Castley@cengage.com'
+    RECIPIENTS = 'janah.intal@ibc.com.au'
   }
 
   stages {
