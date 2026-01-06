@@ -16,9 +16,15 @@ pipeline {
     stage('Install Dependencies') {
       steps {
         bat '''
+          echo === NODE & NPM ===
           node -v
           npm -v
-          npm ci
+
+          echo === CLEAN INSTALL ===
+          rmdir /s /q node_modules 2>nul
+          del package-lock.json 2>nul
+
+          npm install
         '''
       }
     }
@@ -26,7 +32,7 @@ pipeline {
     stage('Install Playwright Browsers') {
       steps {
         bat '''
-          npx playwright install
+          npx playwright install chromium
         '''
       }
     }
