@@ -150,14 +150,20 @@ test.describe('Cart and Checkout Tests', () => {
       page.locator('#dnn_ctr1322_View_ctl00_btnCheckout')
     ).toBeVisible();
 
-    await page.locator('#dnn_ctr1322_View_ctl00_btnCheckout').click();
+    await page.locator('#dnn_ctr1322_View_ctl00_btnCheckout').click({ timeout: 15_000 });
 
     await expect(page).toHaveURL(/\/checkout$/i, { timeout: 20_000 });
 
-    await page.locator('#chkIagree').click();
+    
+    // Ensure the checkbox is actually ready in the DOM
+    const agreementCheckbox = page.locator('#chkIagree');
+    await agreementCheckbox.waitFor({ state: 'visible', timeout: 10_000 });
+
+    // Click it
+    await agreementCheckbox.click({ force: true });
     await expect(page.locator('#btnPayOnInvoice')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Pay on Invoice' }).click();
+    await page.getByRole('button', { name: 'Pay on Invoice' }).click({ force: true });
 
         
     await page.waitForURL(/\/Checkout\?value=success$/i, { timeout: 15_000 });

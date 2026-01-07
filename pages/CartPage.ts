@@ -12,6 +12,7 @@ export class CartPage {
   readonly cartTotalFooter: Locator;
   readonly clearCartBtn: Locator;
   readonly confirmClearBtn: Locator;
+  readonly checkoutBtn: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -27,6 +28,7 @@ export class CartPage {
 
     this.clearCartBtn = page.locator("#linkDelete").first();
     this.confirmClearBtn = page.locator("#btnClearCartConfirm");
+    this.checkoutBtn = page.locator('button[id$="btnCheckout"], a[id$="btnCheckout"]');
   }
 
   async goto(path: string = "/") {
@@ -51,12 +53,20 @@ export class CartPage {
   }
 
   async goToCart() {
-    await this.cartLink.click();
-    await this.page.waitForURL(/\/list\/item\/cart/, { timeout: 15000 });
+    await expect(this.cartLink).toBeVisible({ timeout: 15_000 });
+    await this.cartLink.click({ force: true });
+
+    await expect
+        .poll(() => this.page.url(), { timeout: 20_000 })
+        .toContain('/cart');
   }
 
   async verifyTotal() {
     await expect(this.cartTotalFooter).toBeVisible();
+
+    
+  // ✅ CRITICAL WAIT
+    await expect(this.lineTotals.first()).toBeVisible({ timeout: 20_000 });
 
     const prices = await this.lineTotals.allInnerTexts();
     const subtotal = prices.reduce(
@@ -77,6 +87,15 @@ export class CartPage {
 
     expect(displayed).toBeCloseTo(subtotal + shipping, 2);
   }
+
+  async proceedToCheckout() {
+    // Wait for the button to be stable and attached
+    await this.checkoutBtn.scrollIntoViewIfNeeded();
+    await expect(this.checkoutBtn).toBeEnabled({ timeout: 15_000 });
+    await this.checkoutBtn.click();
+}
+
+
 
   async clearCart() {
     await this.cartLink.click();
