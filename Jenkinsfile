@@ -1,8 +1,15 @@
 pipeline {
     agent any
 
+    // 1. Schedule the run for 6 AM Sydney Time
+    // 'H 6 * * *' runs daily between 6:00-6:59 AM. 
+    // The 'TZ' prefix ensures it respects Sydney's timezone regardless of server time.
+    triggers {
+        cron("""TZ=Australia/Sydney
+H 6 * * *""")
+    }
+
     tools {
-        // Ensure this matches the name in your Jenkins Global Tool Configuration
         nodejs 'node20' 
     }
 
@@ -14,7 +21,6 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Simplified checkout using the configured SCM (Git)
                 checkout scm
             }
         }
@@ -37,16 +43,12 @@ pipeline {
             steps {
                 script {
                     def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-
-                    // --workers=1 ensures tests run one by one
-                    // --retries=2 will re-run a failed test up to 2 times before marking it as failed
                     def playwrightArgs = "--workers=2 --retries=2"
-                    // Using returnStatus: true prevents the pipeline from stopping immediately if tests fail,
-                    // allowing the 'Post' section to still publish reports.
+                    
                     if (isUnix()) {
-                        sh "npx playwright test --project=${params.TEST_ENV} ${tagArg}"
+                        sh "npx playwright test --project=${params.TEST_ENV} ${tagArg} ${playwrightArgs}"
                     } else {
-                        bat "npx playwright test --project=${params.TEST_ENV} ${tagArg}"
+                        bat "npx playwright test --project=${params.TEST_ENV} ${tagArg} ${playwrightArgs}"
                     }
                 }
             }
@@ -55,20 +57,59 @@ pipeline {
 
     post {
         always {
-
-            // 1. Process JUnit results for the trend chart
             junit allowEmptyResults: true, testResults: '**/junit.xml'
-
-            // 2. Publish HTML Report (This creates the link INSIDE the build)
             publishHTML(target: [
                 reportDir: 'playwright-report',
                 reportFiles: 'index.html',
                 reportName: 'Playwright HTML Report',
                 keepAll: true,
-                alwaysLinkToLastBuild: false // Set to false to see build-specific reports
+                alwaysLinkToLastBuild: false
             ])
-            // Archive files so they can be downloaded from the build page
             archiveArtifacts artifacts: 'playwright-report/**/*, test-results/**/*', allowEmptyArchive: true
+        }
+
+        success {
+            mail to: 'janah.intal@ibc.com.au',
+                 subject: "✅ ECOM Daily Test Automation - SUCCESS",
+                 body: """Hi Janah,
+
+Great news! The ECOM Daily Test Automation suite passed successfully.
+
+--------------------------------------------------
+📌 Project: ${env.JOB_NAME}
+🌍 Environment: ${params.TEST_ENV}
+📊 Status: SUCCESS
+🔢 Build: #${env.BUILD_NUMBER}
+--------------------------------------------------
+
+You can view the report here:
+🔗 ${env.BUILD_URL}Playwright_20HTML_20Report/
+
+Best regards,
+Jenkins Automation Bot"""
+        }
+        
+        // 2. Send email only if status is FAILURE or UNSTABLE
+        unsuccessful {
+            mail to: 'janah.intal@ibc.com.au, will.castley@cengage.com',
+                 subject: "⚠️ ECOM Daily Test Automation FAILS",
+                 body: """Hi Team,
+
+The ECOM Daily Test Automation suite just finished, and it looks like we have some failures or instability in the current run.
+
+Quick Summary:
+--------------------------------------------------
+📌 Project: ${env.JOB_NAME}
+🌍 Environment: ${params.TEST_ENV}
+📊 Status: ${currentBuild.currentResult}
+🔢 Build: #${env.BUILD_NUMBER}
+--------------------------------------------------
+
+You can check the detailed Playwright results here to see what went wrong:
+🔗 ${env.BUILD_URL}Playwright_20HTML_20Report/
+
+Or view the build logs here:
+🔗 ${env.BUILD_URL}"""
         }
     }
 }
