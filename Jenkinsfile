@@ -118,8 +118,8 @@ post {
         unsuccessful {
             script {
                 emailext(
-                    to: 'janah.intal@ibc.com.au',
-                    subject: "Oops! Some test have failed - ECOM DAILY TEST [${env.FINAL_ENV}]",
+                    to: 'janah.intal@ibc.com.au, will.castley@cengage.com',
+                    subject: "ECOMM Daily Test - FAILED [${env.FINAL_ENV}]",
                     mimeType: 'text/html',
                     body: """
                     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; max-width: 600px;">
@@ -130,15 +130,29 @@ post {
                         <div style="padding: 20px; color: #333;">
                             <p>Hi Team,</p>
                             <p>The latest automation run encountered some issues that require investigation.</p>
-                            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Environment:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">${env.FINAL_ENV}</td></tr>
-                                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Build Number:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee;">#${env.BUILD_NUMBER}</td></tr>
-                                <tr><td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Failure Details:</strong></td><td style="padding: 8px; border-bottom: 1px solid #eee; color: #dc3545;">Check Logs</td></tr>
-                            </table>
-                            <div style="text-align: center; margin-top: 30px;">
-                                <a href="${env.BUILD_URL}Playwright_20HTML_20Report/" style="background-color: #333; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Review Failures</a>
-                            </div>
-                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    <strong>Environment:</strong>
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    ${env.FINAL_ENV}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    <strong>Failure Details:</strong>
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    <a href="${env.BUILD_URL}Playwright_20HTML_20Report/"
+                                    style="color: #dc3545; font-weight: bold; text-decoration: none;">
+                                    View Failed Tests
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+
                         <div style="background-color: #f8f9fa; color: #888; padding: 10px; text-align: center; font-size: 12px;">
                             Sent by the ECOM Jenkins Bot. <a href="${env.BUILD_URL}">Build Details</a>
                         </div>
