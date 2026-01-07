@@ -1,9 +1,6 @@
 pipeline {
     agent any
 
-    // 1. Schedule the run for 6 AM Sydney Time
-    // 'H 6 * * *' runs daily between 6:00-6:59 AM. 
-    // The 'TZ' prefix ensures it respects Sydney's timezone regardless of server time.
     triggers {
         cron("""TZ=Australia/Sydney
 H 6 * * *""")
@@ -14,7 +11,7 @@ H 6 * * *""")
     }
 
     parameters {
-        choice(name: 'TEST_ENV', choices: ['S2', 'PROD'], description: 'Environment to run')
+        choice(name: 'TEST_ENV', choices: ['PROD', 'S2'], description: 'Environment to run')
         string(name: 'TAGS', defaultValue: '', description: 'Optional @tag filter')
     }
 
@@ -42,13 +39,17 @@ H 6 * * *""")
         stage('Run Tests') {
             steps {
                 script {
+                    // If triggered by Cron, always force PROD. Otherwise, use parameter.
+                    def isScheduled = currentBuild.getBuildCauses().toString().contains('TimerTrigger')
+                    env.FINAL_ENV = isScheduled ? 'PROD' : params.TEST_ENV
+                    
                     def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
                     def playwrightArgs = "--workers=2 --retries=2"
                     
                     if (isUnix()) {
-                        sh "npx playwright test --project=${params.TEST_ENV} ${tagArg} ${playwrightArgs}"
+                        sh "npx playwright test --project=${env.FINAL_ENV} ${tagArg} ${playwrightArgs}"
                     } else {
-                        bat "npx playwright test --project=${params.TEST_ENV} ${tagArg} ${playwrightArgs}"
+                        bat "npx playwright test --project=${env.FINAL_ENV} ${tagArg} ${playwrightArgs}"
                     }
                 }
             }
@@ -69,47 +70,36 @@ H 6 * * *""")
         }
 
         success {
-            mail to: 'janah.intal@ibc.com.au',
-                 subject: "✅ ECOM Daily Test Automation - SUCCESS",
-                 body: """Hi Janah,
+            script {
+                // Only send Success email if it was a PROD run
+                if (env.FINAL_ENV == 'PROD') {
+                    emailext(
+                        to: 'janah.intal@ibc.com.au',
+                        subject: "✅ ECOM Daily Test Automation - SUCCESS [PROD]",
+                        body: """Hi Janah,
 
-Great news! The ECOM Daily Test Automation suite passed successfully.
+The scheduled daily automation for PROD passed successfully.
 
---------------------------------------------------
-📌 Project: ${env.JOB_NAME}
-🌍 Environment: ${params.TEST_ENV}
-📊 Status: SUCCESS
-🔢 Build: #${env.BUILD_NUMBER}
---------------------------------------------------
+Project: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
 
-You can view the report here:
-🔗 ${env.BUILD_URL}Playwright_20HTML_20Report/
-
-Best regards,
-Jenkins Automation Bot"""
+View Report: ${env.BUILD_URL}Playwright_20HTML_20Report/
+"""
+                    )
+                }
+            }
         }
         
-        // 2. Send email only if status is FAILURE or UNSTABLE
         unsuccessful {
+            // Failure emails are always sent regardless of environment
             mail to: 'janah.intal@ibc.com.au, will.castley@cengage.com',
-                 subject: "⚠️ ECOM Daily Test Automation FAILS",
+                 subject: "⚠️ ECOM Daily Test Automation FAILS [${env.FINAL_ENV}]",
                  body: """Hi Team,
 
-The ECOM Daily Test Automation suite just finished, and it looks like we have some failures or instability in the current run.
+The daily automation run for ${env.FINAL_ENV} failed or is unstable.
 
-Quick Summary:
---------------------------------------------------
-📌 Project: ${env.JOB_NAME}
-🌍 Environment: ${params.TEST_ENV}
-📊 Status: ${currentBuild.currentResult}
-🔢 Build: #${env.BUILD_NUMBER}
---------------------------------------------------
-
-You can check the detailed Playwright results here to see what went wrong:
-🔗 ${env.BUILD_URL}Playwright_20HTML_20Report/
-
-Or view the build logs here:
-🔗 ${env.BUILD_URL}"""
+View Report: ${env.BUILD_URL}Playwright_20HTML_20Report/
+Build Logs: ${env.BUILD_URL}"""
         }
     }
 }
