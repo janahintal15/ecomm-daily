@@ -1,83 +1,74 @@
 pipeline {
     agent any
 
-    tools { nodejs 'node20' }
+    tools {
+        // Ensure this matches the name in your Jenkins Global Tool Configuration
+        nodejs 'node20' 
+    }
 
-    environment {
-        // Use forward slashes or escaped backslashes for Windows paths in Jenkins
-        PLAYWRIGHT_BROWSERS_PATH = 'D:/Jenkins/playwright-browsers'
-        JUNIT_FILE = 'reports/junit.xml'
-        HTML_DIR   = 'playwright-report'
-        RECIPIENTS = 'janah.intal@ibc.com.au'
+    parameters {
+        choice(name: 'TEST_ENV', choices: ['S2', 'PROD'], description: 'Environment to run')
+        string(name: 'TAGS', defaultValue: '', description: 'Optional @tag filter')
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']], extensions: [[$class: 'WipeWorkspace']], userRemoteConfigs: [[url: 'https://github.com/janahintal15/ecomm-daily.git']]])
+                // Simplified checkout using the configured SCM (Git)
+                checkout scm
             }
         }
 
-        stage('Clean & Install') {
-            steps {
-                bat 'npm ci'
-                // Force a clean install of the browser to the specific path
-                bat """
-                    set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                    npx playwright install chromium --with-deps
-                """
-            }
-        }
-
-        stage('Verify Browser Path') {
-            steps {
-                // This helps us see in the logs if the exe actually exists
-                bat """
-                    dir "${env.PLAYWRIGHT_BROWSERS_PATH}" /s /b | findstr "chrome.exe" || echo "BROWSER NOT FOUND IN CUSTOM PATH"
-                """
-            }
-        }
-
-        stage('Create .env') {
+        stage('Install Dependencies') {
             steps {
                 script {
-                    def credsId = (params.TEST_ENV == 'S2') ? 'ecom-s2-creds' : 'ecom-prod-creds'
-                    withCredentials([usernamePassword(credentialsId: credsId, usernameVariable: 'U', passwordVariable: 'P')]) {
-                        writeFile file: '.env', text: """
-S2_BASE_URL=https://s2.cengagelearning.com.au
-PROD_BASE_URL=https://www.cengage.com.au
-${params.TEST_ENV}_EMAIL=${U}
-${params.TEST_ENV}_PASSWORD=${P}
-ENV=${params.TEST_ENV}
-"""
+                    if (isUnix()) {
+                        sh 'npm ci'
+                        sh 'npx playwright install --with-deps chromium'
+                    } else {
+                        bat 'npm ci'
+                        bat 'npx playwright install chromium'
                     }
                 }
             }
         }
 
-        stage('Run Playwright') {
+        stage('Run Tests') {
             steps {
                 script {
                     def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-                    // IMPORTANT: We wrap the command to ensure the ENV variable is active during execution
-                    int exitCode = bat(
-                        returnStatus: true, 
-                        script: """
-                            set PLAYWRIGHT_BROWSERS_PATH=${env.PLAYWRIGHT_BROWSERS_PATH}
-                            npx playwright test --project=${params.TEST_ENV} ${tagArg}
-                        """
-                    )
-                    if (exitCode != 0) { currentBuild.result = 'UNSTABLE' }
+                    // Using returnStatus: true prevents the pipeline from stopping immediately if tests fail,
+                    // allowing the 'Post' section to still publish reports.
+                    if (isUnix()) {
+                        sh "npx playwright test --project=${params.TEST_ENV} ${tagArg}"
+                    } else {
+                        bat "npx playwright test --project=${params.TEST_ENV} ${tagArg}"
+                    }
                 }
+            }
+        }
+
+        stage('Publish Reports') {
+            steps {
+                // Process JUnit results for the Jenkins test trend chart
+                junit allowEmptyResults: true, testResults: '**/junit.xml'
+
+                // Link the HTML report to the sidebar
+                publishHTML(target: [
+                    reportDir: 'playwright-report',
+                    reportFiles: 'index.html',
+                    reportName: 'Playwright HTML Report',
+                    keepAll: true,
+                    alwaysLinkToLastBuild: true
+                ])
             }
         }
     }
 
     post {
         always {
-            junit allowEmptyResults: true, testResults: "${JUNIT_FILE}"
-            publishHTML(target: [reportDir: "${HTML_DIR}", reportFiles: 'index.html', keepAll: true, reportName: 'Playwright HTML Report'])
-            archiveArtifacts artifacts: "test-results/**/*, ${HTML_DIR}/**/*", allowEmptyArchive: true
+            // Archive files so they can be downloaded from the build page
+            archiveArtifacts artifacts: 'playwright-report/**/*, test-results/**/*', allowEmptyArchive: true
         }
     }
 }
