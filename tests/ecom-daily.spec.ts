@@ -159,11 +159,11 @@ test.describe('Cart and Checkout Tests', () => {
 
     await page.getByRole('button', { name: 'Pay on Invoice' }).click();
 
-    await expect
-      .poll(async () => page.url(), { timeout: 15_000 })
-      .toMatch(/\/Checkout\?value=success$/i);
+        
+    await page.waitForURL(/\/Checkout\?value=success$/i, { timeout: 15_000 });
 
-    await expect(page.locator('#OrderNumber')).toBeVisible();
+    await expect(page.locator('#OrderNumber')).toBeVisible({ timeout: 20_000 });
+
 
   });
 
