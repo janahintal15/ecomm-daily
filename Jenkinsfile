@@ -47,26 +47,22 @@ pipeline {
                 }
             }
         }
-
-        stage('Publish Reports') {
-            steps {
-                // Process JUnit results for the Jenkins test trend chart
-                junit allowEmptyResults: true, testResults: '**/junit.xml'
-
-                // Link the HTML report to the sidebar
-                publishHTML(target: [
-                    reportDir: 'playwright-report',
-                    reportFiles: 'index.html',
-                    reportName: 'Playwright HTML Report',
-                    keepAll: true,
-                    alwaysLinkToLastBuild: true
-                ])
-            }
-        }
     }
 
     post {
         always {
+
+            // 1. Process JUnit results for the trend chart
+            junit allowEmptyResults: true, testResults: '**/junit.xml'
+
+            // 2. Publish HTML Report (This creates the link INSIDE the build)
+            publishHTML(target: [
+                reportDir: 'playwright-report',
+                reportFiles: 'index.html',
+                reportName: 'Playwright HTML Report',
+                keepAll: true,
+                alwaysLinkToLastBuild: false // Set to false to see build-specific reports
+            ])
             // Archive files so they can be downloaded from the build page
             archiveArtifacts artifacts: 'playwright-report/**/*, test-results/**/*', allowEmptyArchive: true
         }
