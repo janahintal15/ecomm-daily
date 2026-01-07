@@ -63,6 +63,7 @@ export class LoginPage {
   }
 
   async assertLoginSuccess() {
-    await expect(this.userLabel).toBeVisible({ timeout: 20_000 });
+  await expect(this.userLabel).toHaveText(/.+/, { timeout: 20_000 });
+
   }
 }
