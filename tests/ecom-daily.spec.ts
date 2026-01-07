@@ -159,14 +159,12 @@ test.describe('Cart and Checkout Tests', () => {
 
     await page.getByRole('button', { name: 'Pay on Invoice' }).click();
 
-   // 2. Wait for the success URL
-    await expect(page).toHaveURL(/\/Checkout\?value=success$/i, { timeout: 30_000 });
+    await expect
+      .poll(async () => page.url(), { timeout: 15_000 })
+      .toMatch(/\/Checkout\?value=success$/i);
 
-    // 3. Wait for the network to be idle to ensure the order number has loaded from the DB
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#OrderNumber')).toBeVisible();
 
-    // 4. Increase timeout for the Order Number specifically (it can be slow)
-    await expect(page.locator('#OrderNumber')).toBeVisible({ timeout: 30_000 });
   });
 
   test('can checkout via B2B Credit Card', async ({ page }) => {

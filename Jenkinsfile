@@ -118,7 +118,7 @@ post {
         unsuccessful {
             script {
                 emailext(
-                    to: 'janah.intal@ibc.com.au, will.castley@cengage.com',
+                    to: 'janah.intal@ibc.com.au',
                     subject: "Oops! Some test have failed - ECOM DAILY TEST [${env.FINAL_ENV}]",
                     mimeType: 'text/html',
                     body: """
