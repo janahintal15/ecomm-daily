@@ -37,6 +37,10 @@ pipeline {
             steps {
                 script {
                     def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
+
+                    // --workers=1 ensures tests run one by one
+                    // --retries=2 will re-run a failed test up to 2 times before marking it as failed
+                    def playwrightArgs = "--workers=1 --retries=2"
                     // Using returnStatus: true prevents the pipeline from stopping immediately if tests fail,
                     // allowing the 'Post' section to still publish reports.
                     if (isUnix()) {
