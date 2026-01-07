@@ -19,12 +19,17 @@ const SEARCH_QUERY = EXPECTED_ISBNS.join(',');
 // --------------------
 // Helpers
 // --------------------
+// Replace your local getCredentials with a more robust one or import the one from env.ts
 function getCredentials(projectName: string) {
-  const prefix = projectName.toUpperCase(); // S2 / PROD
-  return {
-    email: process.env[`${prefix}_EMAIL`]!,
-    password: process.env[`${prefix}_PASSWORD`]!,
-  };
+  const prefix = projectName.toUpperCase(); 
+  const email = process.env[`${prefix}_EMAIL`];
+  const password = process.env[`${prefix}_PASSWORD`];
+
+  if (!email || !password) {
+    throw new Error(`CRITICAL: Could not find .env variables for ${prefix}_EMAIL. check if .env is loaded.`);
+  }
+
+  return { email, password };
 }
 
 // ======================================================
