@@ -2,6 +2,8 @@ pipeline {
     agent any
 
     triggers {
+        // Runs at 6 AM Sydney time. 
+        // Note: Using standard cron is safer if you aren't sure about the Parameterized plugin.
         cron("""TZ=Australia/Sydney
 H 6 * * *""")
     }
@@ -11,6 +13,7 @@ H 6 * * *""")
     }
 
     parameters {
+        // PROD is first, so it is the default for the 6 AM run
         choice(name: 'TEST_ENV', choices: ['PROD', 'S2'], description: 'Environment to run')
         string(name: 'TAGS', defaultValue: '', description: 'Optional @tag filter')
     }
@@ -39,17 +42,17 @@ H 6 * * *""")
         stage('Run Tests') {
             steps {
                 script {
-                    // If triggered by Cron, always force PROD. Otherwise, use parameter.
+                    // Force PROD if started by timer, otherwise use user choice
                     def isScheduled = currentBuild.getBuildCauses().toString().contains('TimerTrigger')
-                    env.FINAL_ENV = isScheduled ? 'PROD' : params.TEST_ENV
+                    env.RUN_TARGET = isScheduled ? 'PROD' : params.TEST_ENV
                     
                     def tagArg = params.TAGS?.trim() ? "--grep @${params.TAGS.trim()}" : ''
-                    def playwrightArgs = "--workers=2 --retries=2"
+                    def playwrightArgs = "--workers=1 --retries=2"
                     
                     if (isUnix()) {
-                        sh "npx playwright test --project=${env.FINAL_ENV} ${tagArg} ${playwrightArgs}"
+                        sh "npx playwright test --project=${env.RUN_TARGET} ${tagArg} ${playwrightArgs}"
                     } else {
-                        bat "npx playwright test --project=${env.FINAL_ENV} ${tagArg} ${playwrightArgs}"
+                        bat "npx playwright test --project=${env.RUN_TARGET} ${tagArg} ${playwrightArgs}"
                     }
                 }
             }
@@ -71,17 +74,18 @@ H 6 * * *""")
 
         success {
             script {
-                // Only send Success email if it was a PROD run
-                if (env.FINAL_ENV == 'PROD') {
+                // Only email Janah if the run was on PROD
+                if (env.RUN_TARGET == 'PROD') {
                     emailext(
                         to: 'janah.intal@ibc.com.au',
                         subject: "✅ ECOM Daily Test Automation - SUCCESS [PROD]",
                         body: """Hi Janah,
 
-The scheduled daily automation for PROD passed successfully.
+Great news! The daily PROD automation run passed successfully.
 
 Project: ${env.JOB_NAME}
 Build: #${env.BUILD_NUMBER}
+Environment: PROD
 
 View Report: ${env.BUILD_URL}Playwright_20HTML_20Report/
 """
@@ -91,12 +95,17 @@ View Report: ${env.BUILD_URL}Playwright_20HTML_20Report/
         }
         
         unsuccessful {
-            // Failure emails are always sent regardless of environment
             mail to: 'janah.intal@ibc.com.au, will.castley@cengage.com',
-                 subject: "⚠️ ECOM Daily Test Automation FAILS [${env.FINAL_ENV}]",
+                 subject: "⚠️ ECOM Daily Test Automation FAILS [${env.RUN_TARGET}]",
                  body: """Hi Team,
 
-The daily automation run for ${env.FINAL_ENV} failed or is unstable.
+The daily automation run for ${env.RUN_TARGET} failed or is unstable.
+
+--------------------------------------------------
+🌍 Environment: ${env.RUN_TARGET}
+📊 Status: ${currentBuild.currentResult}
+🔢 Build: #${env.BUILD_NUMBER}
+--------------------------------------------------
 
 View Report: ${env.BUILD_URL}Playwright_20HTML_20Report/
 Build Logs: ${env.BUILD_URL}"""

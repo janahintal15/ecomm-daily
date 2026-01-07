@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { CartPage } from '../pages/CartPage';
 import { LoginPage } from '../pages/LoginPage';
+import path from 'path';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// ✅ This ensures the .env file is found relative to this script
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 // --------------------
 // Test data
